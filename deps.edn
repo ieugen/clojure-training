@@ -6,4 +6,4 @@
         }
  :aliases
  {:build {:deps {io.github.clojure/tools.build {:git/tag "v0.1.9" :git/sha "6736c83"}}
-          :ns-default ro.ieugen.training.tools-build-guide}}}
+          :ns-default build}}}

@@ -1,4 +1,4 @@
-(ns ro.ieugen.training.tools-build-guide
+(ns build
   (:require [clojure.tools.build.api :as b]))
 
 
