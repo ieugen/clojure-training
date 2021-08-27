@@ -41,14 +41,34 @@
            :uber-file uber-file
            :basis basis}))
 
+;; Mixed Java / clojure build
+
+(defn compile [_]
+  (b/javac {:src-dirs ["java"]
+            :class-dir class-dir
+            :basis basis
+            :javac-opts ["-source" "11" "-target" "11"]}))
+
+(defn jar-compile [_]
+  (compile nil)
+  (b/write-pom {:class-dir class-dir
+                :lib lib
+                :version version
+                :basis basis
+                :src-dirs ["src"]})
+  (b/copy-dir {:src-dirs ["src" "resources"]
+               :target-dir class-dir})
+  (b/jar {:class-dir class-dir
+          :jar-file jar-file}))
+
 
 (comment
 
   (jar nil)
-  
+
   (uber nil)
 
   (println "Help")
-  
+
   0
   )
