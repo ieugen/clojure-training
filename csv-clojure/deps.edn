@@ -1,0 +1,10 @@
+{:paths ["src" "test" "resources"]
+ :deps {com.github.seancorfield/next.jdbc {:mvn/version "1.2.761"}
+        org.clojure/clojure {:mvn/version "1.10.3"}
+        org.apache.calcite/calcite-core {:mvn/version "1.28.0"}
+        org.apache.calcite/calcite-file {:mvn/version "1.28.0"}
+        org.apache.calcite/calcite-linq4j {:mvn/version "1.28.0"}
+        org.apache.calcite.avatica/avatica-core {:mvn/version "1.20.0"}
+        org.slf4j/slf4j-simple {:mvn/version "1.7.30"}}
+ :aliases
+ {:sqline {:extra-deps {sqlline/sqlline {:mvn/version "1.12.0"}}}}}

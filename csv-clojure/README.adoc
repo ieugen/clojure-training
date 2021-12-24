@@ -1,0 +1,6 @@
+= Clojure implementation of calcite-csv
+
+Online tutorial for the Calcite CSV guide is here https://calcite.apache.org/docs/tutorial.html .
+
+Source code for this is https://github.com/apache/calcite/tree/master/example/csv .
+
