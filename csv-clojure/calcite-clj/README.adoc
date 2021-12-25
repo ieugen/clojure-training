@@ -1,0 +1,15 @@
+= calcite-clj - Use Apache Calcite from Clojure
+
+
+Right now build can be done via clojure tools.build or maven.
+Both builds should be kept working.
+
+.Build instructions
+[source,shell]
+--
+    # Build with maven
+    mvn clean package
+
+    # Build with tools.build
+    clj -T:build
+--
