@@ -1,5 +1,6 @@
-{:paths ["src" "test" "resources"]
- :deps {com.github.seancorfield/next.jdbc {:mvn/version "1.2.761"}
+{:paths ["src" "classes" "test" "resources" ]
+ :deps {calcite-clj/calcite-clj {:local/root "calcite-clj/target/calcite-clj-0.1.8.jar"}
+        com.github.seancorfield/next.jdbc {:mvn/version "1.2.761"}
         org.clojure/clojure {:mvn/version "1.10.3"}
         org.apache.calcite/calcite-core {:mvn/version "1.28.0"}
         org.apache.calcite/calcite-file {:mvn/version "1.28.0"}
@@ -7,4 +8,7 @@
         org.apache.calcite.avatica/avatica-core {:mvn/version "1.20.0"}
         org.slf4j/slf4j-simple {:mvn/version "1.7.30"}}
  :aliases
- {:sqline {:extra-deps {sqlline/sqlline {:mvn/version "1.12.0"}}}}}
+ {:build {:deps {io.github.seancorfield/build-clj {:git/tag "v0.6.5" :git/sha "972031a"}}
+          :ns-default build}
+  :debug {:extra-deps {org.clojure/tools.trace {:mvn/version "0.7.11"}}}
+  :sqline {:extra-deps {sqlline/sqlline {:mvn/version "1.12.0"}}}}}

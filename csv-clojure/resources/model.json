@@ -23,9 +23,10 @@
       {
         "name": "SALES",
         "type": "custom",
-        "factory": "org.apache.calcite.adapter.csv.CsvSchemaFactory",
+        "factory": "ro.ieugen.calcite.clj.SchemaFactory",
         "operand": {
-          "directory": "sales"
+          "clojure-clj.schema-factory": "ro.ieugen.calcite-csv/csv-schema",
+          "directory": "resources/sales"
         }
       }
     ]
