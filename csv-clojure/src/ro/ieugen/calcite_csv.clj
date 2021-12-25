@@ -32,33 +32,46 @@
 (def csv-table-flavors [:scannable :filterable :translatable])
 
 (defn get-field-types
-  [^RelDataTypeFactory type-factory source field-types is-stream ]
+  [^RelDataTypeFactory type-factory source field-types is-stream]
   ;; TODO: In java this is cached.
+  (println "get-field-types" type-factory "src" source "field-types" field-types)
   (CsvEnumerator/deduceRowType type-factory source field-types is-stream))
 
 (defn scannable-table
   ^Table [^Source source ^RelProtoDataType proto-row-type]
-  (let [row-type (atom nil)]
+  (let [row-type (atom nil)
+        is-tream false]
     (reify
       ScannableTable Wrapper
       (getStatistic [this] Statistics/UNKNOWN)
       (getJdbcTableType [this] Schema$TableType/TABLE)
-      (unwrap [this class] (when (.isInstance class this) (.cast class this)))
+      (unwrap [this aClass]
+        (do
+          (println "Unwrap" source)
+          (if (.isInstance aClass this) 
+            (.cast aClass this)
+            nil)))
       (isRolledUp [this column] false)
       (rolledUpColumnValidInsideAgg [this column call parent config] true)
       (getRowType [this type-factory]
         (cond
-          (nil? proto-row-type) (.apply proto-row-type type-factory)
+          (some? proto-row-type) (do
+                                   (println "Oh oh" proto-row-type "aa" type-factory)
+                                   (.apply proto-row-type type-factory))
           (nil? @row-type) (do
-                             (reset! row-type (CsvEnumerator/deduceRowType type-factory source nil (-> this (.isStream))))
-                             @row-type)))
+                             (println "reset")
+                             (reset! row-type (CsvEnumerator/deduceRowType type-factory source nil is-tream))))
+        @row-type)
       (toString [this] "ro.ieugen.calcite-csv/scannable-table")
       (scan [this root]
+        (println "scan " source)
         (let [type-factory (.getTypeFactory root)
-              field-types (get-field-types type-factory source (ArrayList.) (.isStream this))
+              field-types (get-field-types type-factory source (ArrayList.) is-tream)
               fields (ImmutableIntList/identity (.size field-types))
               cancel-flag (.get DataContext$Variable/CANCEL_FLAG root)
               row-converter (CsvEnumerator/arrayConverter field-types fields false)]
+          (println "type-factory" type-factory)
+          (println "field-types" field-types)
           (proxy
            [AbstractEnumerable] []
             (enumerator [this]
@@ -75,8 +88,11 @@
 (defn create-table
   "Creates different sub-type of table based on the `flavor`"
   ^Table [^Source source flavor]
+  ;; (println "Create table" source "flavor:" flavor)
   (case flavor
-    :scannable (scannable-table source nil)
+    :scannable (do
+                 (println "Create scannable table" source)
+                 (scannable-table source nil))
     :translatable (translatable-table source nil)
     :filterable (filterable-table source nil)
     (throw (AssertionError. (str "Unknown flavor" flavor)))))
@@ -94,7 +110,7 @@
   "Returns true if f is a csv or a json file (with optional .gz extension)."
   [^File f]
   (let [fname (trim (.getName f) ".gz")]
-    (println "File" fname)
+    ;; (println "File" fname)
     (and (.isFile f)
          (or (str/ends-with? fname ".csv")
              (str/ends-with? fname ".json")))))
@@ -150,8 +166,8 @@
         flavor-name (or (.get operand "flavor") "scannable")
         flavor (keyword (str/lower-case flavor-name))
         tables (create-table-map directory-file flavor)
-        types (atom {})
         sub-schemas (atom {})]
+    ;; (println tables)
     (reify
       Schema
       (isMutable [this] true)
@@ -161,25 +177,19 @@
         (Schemas/subSchemaExpression parent-schema name (.getClass this)))
       (getTableNames [this] (.keySet tables))
       (getTable [this name] (.get tables name))
-      (getType [this name] (.get tables name))
+      (getType [this name] (.get (.getTypeMap this) name))
+      (getTypeNames [this] (.keySet (.getTypeMap this)))
       (getFunctions [this name] (HashSet.))
       (getFunctionNames [this] (HashSet.))
-      (getSubSchemaNames [this] (HashSet.))
+      (getSubSchemaNames [this] (.keySet (HashMap.)))
       (getSubSchema [this name] (get @sub-schemas name)))))
 
 (comment
 
-  (str/lower-case nil)
-
-  (println "Hello")
-  (println (.camelName ModelHandler$ExtraOperand/BASE_DIRECTORY))
-
   (trim "hello.csv.gz" ".gz")
 
-  (let [x ["a" "b" "c"]]
-    (into {} (map (fn [f] [f (str "val-" f)]) x)))
-
-  (create-table-map (io/file "resources/sales") :scannable)
+  (let [tables (create-table-map (io/file "resources/sales") :scannable)]
+    (.keySet tables))
 
   (require '[clojure.tools.trace :as trace])
   (trace/trace-ns 'ro.ieugen.calcite-csv)
@@ -188,7 +198,7 @@
             :user "admin"
             :password "admin"}
         ds (jdbc/get-datasource db)]
-    (jdbc/execute! ds ["select * from SALES"]))
+    (jdbc/execute! ds ["select * from emps"]))
 
   (let [operand (doto (HashMap.)
                   (.put "directory" "resources/sales")
@@ -196,5 +206,4 @@
         query "select * from sales"
         ^SqlParser parser (SqlParser/create query)
         ^SqlNode sql-node (.parseQuery parser)]
-    (println (.toString sql-node)))
-  )
+    (println (.toString sql-node))))
