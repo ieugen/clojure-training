@@ -6,6 +6,7 @@
            (java.util ArrayList
                       HashSet
                       HashMap
+                      List
                       Map
                       Objects)
            (org.apache.calcite DataContext$Variable)
@@ -29,53 +30,54 @@
                                     Sources
                                     ImmutableIntList)))
 
+(set! *warn-on-reflection* true)
+
 (def csv-table-flavors [:scannable :filterable :translatable])
 
 (defn get-field-types
-  [^RelDataTypeFactory type-factory source field-types is-stream]
-  ;; TODO: In java this is cached.
-  (println "get-field-types" type-factory "src" source "field-types" field-types)
-  (CsvEnumerator/deduceRowType type-factory source field-types is-stream))
+  ^List [^RelDataTypeFactory type-factory ^Source source ^List field-types ^Boolean is-stream]
+  ;; TODO: This will mutate field-types !!
+  (when (.isEmpty field-types)
+    (CsvEnumerator/deduceRowType type-factory source field-types is-stream))
+  field-types)
 
 (defn scannable-table
   ^Table [^Source source ^RelProtoDataType proto-row-type]
   (let [row-type (atom nil)
-        is-tream false]
+        is-tream false
+        field-types-x (ArrayList.)]
     (reify
       ScannableTable Wrapper
       (getStatistic [this] Statistics/UNKNOWN)
       (getJdbcTableType [this] Schema$TableType/TABLE)
       (unwrap [this aClass]
-        (do
-          (println "Unwrap" source)
-          (if (.isInstance aClass this) 
-            (.cast aClass this)
-            nil)))
+              (if (.isInstance aClass this)
+                (.cast aClass this)
+                nil))
       (isRolledUp [this column] false)
       (rolledUpColumnValidInsideAgg [this column call parent config] true)
       (getRowType [this type-factory]
         (cond
           (some? proto-row-type) (do
-                                   (println "Oh oh" proto-row-type "aa" type-factory)
+                                  ;;  (println "Oh oh" proto-row-type "aa" type-factory)
                                    (.apply proto-row-type type-factory))
           (nil? @row-type) (do
-                             (println "reset")
+                            ;;  (println "reset")
                              (reset! row-type (CsvEnumerator/deduceRowType type-factory source nil is-tream))))
         @row-type)
       (toString [this] "ro.ieugen.calcite-csv/scannable-table")
       (scan [this root]
-        (println "scan " source)
+        ;; (println "scan " source "root" root)
         (let [type-factory (.getTypeFactory root)
-              field-types (get-field-types type-factory source (ArrayList.) is-tream)
+              field-types (get-field-types type-factory source field-types-x is-tream)
               fields (ImmutableIntList/identity (.size field-types))
-              cancel-flag (.get DataContext$Variable/CANCEL_FLAG root)
-              row-converter (CsvEnumerator/arrayConverter field-types fields false)]
-          (println "type-factory" type-factory)
-          (println "field-types" field-types)
+              cancel-flag (.get DataContext$Variable/CANCEL_FLAG root)]
           (proxy
            [AbstractEnumerable] []
-            (enumerator [this]
-              (CsvEnumerator. source cancel-flag false nil row-converter))))))))
+            (enumerator []
+              ;; (println "Inside enumerator" field-types "fields" fields "cancel" cancel-flag)
+              (let [converter (CsvEnumerator/arrayConverter field-types fields false)]
+                (CsvEnumerator. source cancel-flag false nil converter)))))))))
 
 (defn translatable-table
   ^Table [^Source source proto-row-type]
@@ -90,9 +92,7 @@
   ^Table [^Source source flavor]
   ;; (println "Create table" source "flavor:" flavor)
   (case flavor
-    :scannable (do
-                 (println "Create scannable table" source)
-                 (scannable-table source nil))
+    :scannable (scannable-table source nil)
     :translatable (translatable-table source nil)
     :filterable (filterable-table source nil)
     (throw (AssertionError. (str "Unknown flavor" flavor)))))
@@ -135,7 +135,7 @@
 
 (defn create-table-map
   "Scan a directory `dir` to register csv files as tables of `flavor` type."
-  [^File dir flavor]
+  ^Map [^File dir flavor]
   (let [base-source (Sources/of dir)]
     (if-let [files (filter csv-json-file-filter (file-seq dir))]
       (into {} (map (partial file->Table base-source flavor) files))
@@ -177,8 +177,8 @@
         (Schemas/subSchemaExpression parent-schema name (.getClass this)))
       (getTableNames [this] (.keySet tables))
       (getTable [this name] (.get tables name))
-      (getType [this name] (.get (.getTypeMap this) name))
-      (getTypeNames [this] (.keySet (.getTypeMap this)))
+      (getType [this name] (.get (HashMap.) name))
+      (getTypeNames [this] (HashSet.))
       (getFunctions [this name] (HashSet.))
       (getFunctionNames [this] (HashSet.))
       (getSubSchemaNames [this] (.keySet (HashMap.)))
@@ -198,12 +198,5 @@
             :user "admin"
             :password "admin"}
         ds (jdbc/get-datasource db)]
-    (jdbc/execute! ds ["select * from emps"]))
-
-  (let [operand (doto (HashMap.)
-                  (.put "directory" "resources/sales")
-                  (.put "flavor" "scannable"))
-        query "select * from sales"
-        ^SqlParser parser (SqlParser/create query)
-        ^SqlNode sql-node (.parseQuery parser)]
-    (println (.toString sql-node))))
+    (jdbc/execute! ds ["select * from emps where age is null or age >= 40"]))
+  )
