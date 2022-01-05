@@ -1,61 +1,45 @@
 (ns ro.ieugen.calcite-csv
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [com.rpl.proxy-plus :as proxyp]
+            [com.rpl.proxy-plus :refer [proxy+]]
             [next.jdbc :as jdbc])
   (:import (java.io File)
            (java.util ArrayList
-                      HashSet
-                      HashMap
                       List
-                      Map
-                      Objects)
-           (org.apache.calcite DataContext$Variable)
-           (org.apache.calcite.adapter.enumerable EnumerableRel)
+                      Map)
+           (org.apache.calcite DataContext
+                               DataContext$Variable)
            (org.apache.calcite.adapter.file CsvEnumerator
                                             JsonScannableTable)
            (org.apache.calcite.adapter.java JavaTypeFactory)
            (org.apache.calcite.linq4j AbstractEnumerable)
            (org.apache.calcite.model ModelHandler$ExtraOperand)
-           (org.apache.calcite.rel.core TableScan)
            (org.apache.calcite.rel.type RelDataTypeFactory
                                         RelProtoDataType)
-           (org.apache.calcite.schema FilterableTable
-                                      ScannableTable
-                                      Schema
-                                      Schema$TableType
+           (org.apache.calcite.schema Schema
                                       SchemaPlus
-                                      Schemas
-                                      Statistics
-                                      Table
-                                      TranslatableTable
-                                      QueryableTable
-                                      Wrapper)
-           (org.apache.calcite.util Source
-                                    Sources
-                                    ImmutableIntList)))
+                                      ScannableTable
+                                      Table)
+           (org.apache.calcite.schema.impl AbstractSchema
+                                           AbstractTable)
+           (org.apache.calcite.util ImmutableIntList
+                                    Source
+                                    Sources)))
 
 (set! *warn-on-reflection* true)
 
-(def csv-table-flavors [:scannable :filterable :translatable])
-
-(def object-class (class (make-array Object 0)))
+;; (def csv-table-flavors [:scannable :filterable :translatable])
 
 (defn get-field-types
-  ^List [^RelDataTypeFactory type-factory ^Source source ^List field-types ^Boolean is-stream]
+  ^List [^RelDataTypeFactory type-factory ^Source source ^List field-types is-stream]
   ;; TODO: This will mutate field-types !!
   (when (.isEmpty field-types)
     (CsvEnumerator/deduceRowType type-factory source field-types is-stream))
   field-types)
 
-(defn ^:private unwrap
-  [this ^Class aClass]
-  (if (.isInstance aClass this)
-    (.cast aClass this)
-    nil))
-
 (defn ^:private get-row-type
   [this ^Source source ^JavaTypeFactory type-factory ^RelProtoDataType proto-row-type row-type is-stream]
+  ;; (println "Get row type" source "tf" type-factory "prt" proto-row-type "rt" @row-type "is" is-stream)
   (cond
     (some? proto-row-type) (do
                              (.apply proto-row-type type-factory))
@@ -69,104 +53,29 @@
    data by calling the {@link #scan(DataContext)} method."
   ^Table [^Source source ^RelProtoDataType proto-row-type]
   (let [row-type (atom nil)
-        is-tream false
-        field-types-x (ArrayList.)]
-    (reify
-      ScannableTable Wrapper
-      (getStatistic [this] Statistics/UNKNOWN)
-      (getJdbcTableType [this] Schema$TableType/TABLE)
-      (unwrap [this aClass] (unwrap this aClass))
-      (isRolledUp [this column] false)
-      (rolledUpColumnValidInsideAgg [this column call parent config] true)
-      (getRowType [this type-factory]
-        (get-row-type this source type-factory proto-row-type row-type proto-row-type))
-      (toString [this] "ro.ieugen.calcite-csv/scannable-table")
-      (scan [this root]
-        (let [type-factory (.getTypeFactory root)
-              field-types (get-field-types type-factory source field-types-x is-tream)
-              fields (ImmutableIntList/identity (.size field-types))
-              cancel-flag (.get DataContext$Variable/CANCEL_FLAG root)]
-          (proxy
-           [AbstractEnumerable] []
-            (enumerator []
-              (let [converter (CsvEnumerator/arrayConverter field-types fields false)]
-                (CsvEnumerator. source cancel-flag false nil converter)))))))))
-
-(defn csv-table-scan
-  [cluster rel-opt-table translatable-table fields]
-  (let [])
-  (proxy 
-   [TableScan EnumerableRel] [cluster]))
-
-
-
-(defn translatable-table
-  ^Table [^Source source ^RelProtoDataType proto-row-type]
-  (let [row-type (atom nil)
         is-stream false
         field-types-x (ArrayList.)]
-    (reify QueryableTable TranslatableTable Wrapper
-      (getStatistic [this] Statistics/UNKNOWN)
-      (getJdbcTableType [this] Schema$TableType/TABLE)
-      (unwrap [this aClass] (unwrap this aClass))
-      (isRolledUp [this column] false)
-      (rolledUpColumnValidInsideAgg [this column call parent config] true)
-      (getRowType [this type-factory]
-        (get-row-type this source type-factory proto-row-type row-type proto-row-type))
-      (toString [this] "ro.ieugen.calcite-csv/translatable-table")
-      ;; (project [this root fields]
-      ;;   (let [cancel-flag (.get DataContext$Variable/CANCEL_FLAG root)]
-      ;;     (proxy
-      ;;      [AbstractEnumerable] []
-      ;;       (enumerator []
-      ;;         (let [type-factory (.getTypeFactory root)
-      ;;               field-types (get-field-types type-factory source field-types-x is-stream)
-      ;;               fields (ImmutableIntList/of fields)]
-      ;;           (CsvEnumerator. source cancel-flag field-types fields))))))
-      (getExpression [this schema table-name clazz]
-        (Schemas/tableExpression schema (.getElementType this) table-name clazz))
-      (getElementType [this] object-class)
-      (asQueryable [this query-provider schema table-name]
-        (throw (UnsupportedOperationException. "Not implemented.")))
-      (toRel [this context rel-opt-table]
-        (let [field-count (-> rel-opt-table 
-                              (.getRowType)
-                              (.getFieldCount))
-              fields (CsvEnumerator/identityList field-count)
-              cluster (.getCluster context)]
-          (csv-table-scan cluster rel-opt-table this fields))))))
+    (proxy+
+     []
+     AbstractTable
+     (getRowType
+      [this ^RelDataTypeFactory type-factory]
+      (get-row-type this source type-factory proto-row-type row-type is-stream))
 
-(defn filterable-table
-  "Table based on a CSV file that can implement simple filtering.
-   It implements the {@link FilterableTable} interface, so Calcite gets
-   data by calling the {@link #scan(DataContext, List)} method."
-  ^Table [^Source source proto-row-type]
-  (let [row-type (atom nil)
-        is-tream false
-        field-types-x (ArrayList.)]
-    (reify FilterableTable Wrapper
-      (getStatistic [this] Statistics/UNKNOWN)
-      (getJdbcTableType [this] Schema$TableType/TABLE)
-      (unwrap [this aClass] (unwrap this aClass))
-      (isRolledUp [this column] false)
-      (rolledUpColumnValidInsideAgg [this column call parent config] true)
-      (getRowType [this type-factory]
-        (get-row-type this source type-factory proto-row-type row-type proto-row-type))
-      (toString [this] "ro.ieugen.calcite-csv/filterable-table")
-      (scan [this root filters]
-        ;; (println "scan " source "root" root)
-        (let [type-factory (.getTypeFactory root)
-              field-types (get-field-types type-factory source field-types-x is-tream)
-              filter-values (make-array String (.size field-types))
-              ;; filters.removeIf (filter -> addFilter (filter, filterValues));
-              fields (ImmutableIntList/identity (.size field-types))
-              cancel-flag (.get DataContext$Variable/CANCEL_FLAG root)]
-          (proxy
-           [AbstractEnumerable] []
-            (enumerator []
-              ;; (println "Inside enumerator" field-types "fields" fields "cancel" cancel-flag)
-              (let [converter (CsvEnumerator/arrayConverter field-types fields false)]
-                (CsvEnumerator. source cancel-flag false filter-values converter)))))))))
+     ScannableTable
+     (scan
+      [this ^DataContext root]
+      (let [type-factory (.getTypeFactory root)
+            field-types (get-field-types type-factory source field-types-x is-stream)
+            fields (ImmutableIntList/identity (.size field-types))
+            cancel-flag (.get DataContext$Variable/CANCEL_FLAG root)]
+        (proxy+
+         []
+         AbstractEnumerable
+         (enumerator
+          [this]
+          (let [converter (CsvEnumerator/arrayConverter field-types fields false)]
+            (CsvEnumerator. source cancel-flag false nil converter)))))))))
 
 (defn create-table
   "Creates different sub-type of table based on the `flavor`"
@@ -174,8 +83,12 @@
   ;; (println "Create table" source "flavor:" flavor)
   (case flavor
     :scannable (scannable-table source nil)
-    :translatable (translatable-table source nil)
-    :filterable (filterable-table source nil)
+    :translatable (do
+                    (throw (UnsupportedOperationException. "translatable not implemented"))
+                    #_(translatable-table source nil))
+    :filterable (do
+                  (throw (UnsupportedOperationException. "filterable not implemented"))
+                  #_(filterable-table source nil))
     (throw (AssertionError. (str "Unknown flavor" flavor)))))
 
 (defn- trim
@@ -197,7 +110,7 @@
              (str/ends-with? fname ".json")))))
 
 (defn file->Table
-  "Read a file as a Table"
+  "Read a CSV/JSON file as a Table."
   [^Source base-source flavor ^File f]
   (let [^Source source (Sources/of f)
         source-sans-gz (.trim source ".gz")]
@@ -239,31 +152,19 @@
 (defn csv-schema
   "Create a Calcite Schema and return it for use."
   ^Schema [^SchemaPlus parent-schema ^String name ^Map operand]
-  (println "csv-schema" parent-schema "name:" name "operand:" operand)
+  ;; (println "csv-schema" parent-schema "name:" name "operand:" operand)
   (let [directory (.get operand "directory")
         baseDirName (.camelName ModelHandler$ExtraOperand/BASE_DIRECTORY)
         base (io/file (.get operand baseDirName))
         directory-file (schema-directory-file base directory)
         flavor-name (or (.get operand "flavor") "scannable")
         flavor (keyword (str/lower-case flavor-name))
-        tables (create-table-map directory-file flavor)
-        sub-schemas (atom {})]
-    ;; (println tables)
-    (reify
-      Schema
-      (isMutable [this] true)
-      (snapshot [this version] this)
-      (getExpression [this parent-schema name]
-        (Objects/requireNonNull parent-schema "parent-schema")
-        (Schemas/subSchemaExpression parent-schema name (.getClass this)))
-      (getTableNames [this] (.keySet tables))
-      (getTable [this name] (.get tables name))
-      (getType [this name] (.get (HashMap.) name))
-      (getTypeNames [this] (HashSet.))
-      (getFunctions [this name] (HashSet.))
-      (getFunctionNames [this] (HashSet.))
-      (getSubSchemaNames [this] (.keySet (HashMap.)))
-      (getSubSchema [this name] (get @sub-schemas name)))))
+        tables (create-table-map directory-file flavor)]
+    ;; (println "tables " tables)
+    (proxy+
+     []
+     AbstractSchema
+     (getTableMap [this] tables))))
 
 (comment
 

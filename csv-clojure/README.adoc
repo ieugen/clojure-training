@@ -4,14 +4,14 @@ Online tutorial for the Calcite CSV guide is here https://calcite.apache.org/doc
 
 Source code for this is https://github.com/apache/calcite/tree/master/example/csv .
 
-
+Needs: https://issues.apache.org/jira/browse/CALCITE-4966
 
 .Calva JVM debugging options
 [source,json]
 --
 
+    # See docs here https://docs.oracle.com/javase/8/docs/technotes/guides/troubleshoot/envvars002.html and https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#tooloptions
     "calva.jackInEnv": {
-        "JVM_OPTS": "${env:JVM_OPTS} -Dorg.slf4j.simpleLogger.defaultLogLevel=TRACE ",
         "JAVA_TOOL_OPTIONS": "${env:JAVA_TOOL_OPTIONS} -Dorg.slf4j.simpleLogger.defaultLogLevel=TRACE -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=7896"
     },
 

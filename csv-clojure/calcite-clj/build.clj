@@ -6,7 +6,7 @@
             [org.corfield.build :as bb]))
 
 
-(def lib 'calcite-clj/calcite-clj)
+(def lib 'io.github.ieugen/calcite-clj)
 ;; if you want a version of MAJOR.MINOR.COMMITS:
 (def version (format "0.1.%s" (b/git-count-revs nil)))
 (def class-dir "target/classes")
@@ -14,7 +14,7 @@
 (def jar-file (format "target/%s-%s.jar" (name lib) version))
 (def src-dirs ["src/main/java"])
 
-(defn compile [{:keys [src-dirs class-dir basis] :as opts}]
+(defn javac [opts]
   (b/javac {:src-dirs src-dirs
             :class-dir class-dir
             :basis basis
@@ -24,12 +24,9 @@
 (defn ci "Run the CI pipeline of tests (and build the JAR)." [opts]
   (-> opts
       (assoc :lib lib
-             :version version
-             :src-dirs src-dirs
-             :class-dir class-dir
-             :basis basis)
+             :version version)
       (bb/clean)
-      (compile)
+      (javac)      
       (bb/jar)))
 
 (defn install "Install the JAR locally." [opts]

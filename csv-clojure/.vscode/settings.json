@@ -1,0 +1,5 @@
+{
+    "calva.jackInEnv": {
+        "JAVA_TOOL_OPTIONS": "${env:JAVA_TOOL_OPTIONS} -Dorg.slf4j.simpleLogger.defaultLogLevel=INFO"
+    }
+}
