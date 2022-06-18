@@ -7,3 +7,4 @@ target/
 .portal
 
 redis-university/**/*.rdb
+redis-university/**/*.aof
