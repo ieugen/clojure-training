@@ -8,3 +8,4 @@ target/
 
 redis-university/**/*.rdb
 redis-university/**/*.aof
+redis-university/**/*.aof.manifest
